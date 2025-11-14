@@ -29,7 +29,7 @@ class Slidable extends StatefulWidget {
     this.dragStartBehavior = DragStartBehavior.down,
     this.useTextDirection = true,
     required this.child,
-    required this.clipper,
+    this.clipperType = SlidableClipperType.normal,
   });
 
   /// The Slidable widget controller.
@@ -100,12 +100,12 @@ class Slidable extends StatefulWidget {
   ///
   ///  * [DragGestureRecognizer.dragStartBehavior], which gives an example for the different behaviors.
   final DragStartBehavior dragStartBehavior;
+  final SlidableClipperType clipperType;
 
   /// The widget below this widget in the tree.
   ///
   /// {@macro flutter.widgets.ProxyWidget.child}
   final Widget child;
-  final SlidableClipperType clipper;
 
   @override
   _SlidableState createState() => _SlidableState();
@@ -121,13 +121,15 @@ class Slidable extends StatefulWidget {
   /// ```
   /// {@end-tool}
   static SlidableController? of(BuildContext context) {
-    final scope = context.getElementForInheritedWidgetOfExactType<_SlidableControllerScope>()?.widget
-        as _SlidableControllerScope?;
+    final scope = context
+        .getElementForInheritedWidgetOfExactType<_SlidableControllerScope>()
+        ?.widget as _SlidableControllerScope?;
     return scope?.controller;
   }
 }
 
-class _SlidableState extends State<Slidable> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+class _SlidableState extends State<Slidable>
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late final SlidableController controller;
   late Animation<Offset> moveAnimation;
   late bool keepPanesOrder;
@@ -187,8 +189,9 @@ class _SlidableState extends State<Slidable> with TickerProviderStateMixin, Auto
 
   void updateIsLeftToRight() {
     final textDirection = Directionality.of(context);
-    controller.isLeftToRight =
-        widget.direction == Axis.vertical || !widget.useTextDirection || textDirection == TextDirection.ltr;
+    controller.isLeftToRight = widget.direction == Axis.vertical ||
+        !widget.useTextDirection ||
+        textDirection == TextDirection.ltr;
   }
 
   void handleActionPanelTypeChanged() {
@@ -208,7 +211,9 @@ class _SlidableState extends State<Slidable> with TickerProviderStateMixin, Auto
     moveAnimation = controller.animation.drive(
       Tween<Offset>(
         begin: Offset.zero,
-        end: widget.direction == Axis.horizontal ? Offset(end, 0) : Offset(0, end),
+        end: widget.direction == Axis.horizontal
+            ? Offset(end, 0)
+            : Offset(0, end),
       ),
     );
   }
@@ -255,8 +260,12 @@ class _SlidableState extends State<Slidable> with TickerProviderStateMixin, Auto
         if (actionPane != null)
           Positioned.fill(
             child: ClipRect(
-              clipper: createSlidableClipper(
-                type: SlidableClipperType.normal,
+              clipper: widget.clipperType == SlidableClipperType.zero
+                  ? _ZeroSlidableClipper(
+                axis: widget.direction,
+                controller: controller,
+              )
+                  : _SlidableClipper(
                 axis: widget.direction,
                 controller: controller,
               ),
@@ -284,7 +293,8 @@ class _SlidableState extends State<Slidable> with TickerProviderStateMixin, Auto
             child: ActionPaneConfiguration(
               alignment: actionPaneAlignment,
               direction: widget.direction,
-              isStartActionPane: controller.actionPaneType.value == ActionPaneType.start,
+              isStartActionPane:
+              controller.actionPaneType.value == ActionPaneType.start,
               child: _SlidableControllerScope(
                 controller: controller,
                 child: content,
@@ -294,19 +304,6 @@ class _SlidableState extends State<Slidable> with TickerProviderStateMixin, Auto
         ),
       ),
     );
-  }
-}
-
-CustomClipper<Rect> createSlidableClipper({
-  required SlidableClipperType type,
-  required Axis axis,
-  required SlidableController controller,
-}) {
-  switch (type) {
-    case SlidableClipperType.normal:
-      return _SlidableClipper(axis: axis, controller: controller);
-    case SlidableClipperType.zero:
-      return _ZeroSlidableClipper(axis: axis, controller: controller);
   }
 }
 
@@ -324,9 +321,31 @@ class _SlidableControllerScope extends InheritedWidget {
   }
 }
 
-enum SlidableClipperType {
-  normal,
-  zero,
+class _ZeroSlidableClipper extends CustomClipper<Rect> {
+  _ZeroSlidableClipper({
+    required this.axis,
+    required this.controller,
+  }) : super(reclip: controller.animation);
+
+  final Axis axis;
+  final SlidableController controller;
+
+  @override
+  Rect getClip(Size size) {
+    switch (axis) {
+      case Axis.horizontal:
+      case Axis.vertical:
+        return Rect.fromLTWH(0, 0, size.width, size.height);
+    }
+  }
+
+  @override
+  Rect getApproximateClipRect(Size size) => getClip(size);
+
+  @override
+  bool shouldReclip(_ZeroSlidableClipper oldClipper) {
+    return oldClipper.axis != axis;
+  }
 }
 
 class _SlidableClipper extends CustomClipper<Rect> {
@@ -370,30 +389,7 @@ class _SlidableClipper extends CustomClipper<Rect> {
   }
 }
 
-class _ZeroSlidableClipper extends CustomClipper<Rect> {
-  _ZeroSlidableClipper({
-    required this.axis,
-    required this.controller,
-  }) : super(reclip: controller.animation);
-
-  final Axis axis;
-  final SlidableController controller;
-
-  @override
-  Rect getClip(Size size) {
-    switch (axis) {
-      case Axis.horizontal:
-        return Rect.fromLTRB(0, 0, 0, size.height);
-      case Axis.vertical:
-        return Rect.fromLTRB(0, 0, size.width, 0);
-    }
-  }
-
-  @override
-  Rect getApproximateClipRect(Size size) => getClip(size);
-
-  @override
-  bool shouldReclip(_ZeroSlidableClipper oldClipper) {
-    return oldClipper.axis != axis;
-  }
+enum SlidableClipperType {
+  normal,
+  zero,
 }
