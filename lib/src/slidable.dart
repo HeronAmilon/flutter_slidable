@@ -29,7 +29,7 @@ class Slidable extends StatefulWidget {
     this.dragStartBehavior = DragStartBehavior.down,
     this.useTextDirection = true,
     required this.child,
-    this.clipper,
+    required this.clipper,
   });
 
   /// The Slidable widget controller.
@@ -105,7 +105,7 @@ class Slidable extends StatefulWidget {
   ///
   /// {@macro flutter.widgets.ProxyWidget.child}
   final Widget child;
-  final CustomClipper<Rect>? clipper;
+  final SlidableClipperType clipper;
 
   @override
   _SlidableState createState() => _SlidableState();
@@ -255,11 +255,11 @@ class _SlidableState extends State<Slidable> with TickerProviderStateMixin, Auto
         if (actionPane != null)
           Positioned.fill(
             child: ClipRect(
-              clipper: widget.clipper ??
-                  _SlidableClipper(
-                    axis: widget.direction,
-                    controller: controller,
-                  ),
+              clipper: createSlidableClipper(
+                type: SlidableClipperType.normal,
+                axis: widget.direction,
+                controller: controller,
+              ),
               child: actionPane,
             ),
           ),
@@ -297,6 +297,19 @@ class _SlidableState extends State<Slidable> with TickerProviderStateMixin, Auto
   }
 }
 
+CustomClipper<Rect> createSlidableClipper({
+  required SlidableClipperType type,
+  required Axis axis,
+  required SlidableController controller,
+}) {
+  switch (type) {
+    case SlidableClipperType.normal:
+      return _SlidableClipper(axis: axis, controller: controller);
+    case SlidableClipperType.zero:
+      return _ZeroSlidableClipper(axis: axis, controller: controller);
+  }
+}
+
 class _SlidableControllerScope extends InheritedWidget {
   const _SlidableControllerScope({
     required this.controller,
@@ -309,6 +322,11 @@ class _SlidableControllerScope extends InheritedWidget {
   bool updateShouldNotify(_SlidableControllerScope old) {
     return controller != old.controller;
   }
+}
+
+enum SlidableClipperType {
+  normal,
+  zero,
 }
 
 class _SlidableClipper extends CustomClipper<Rect> {
@@ -348,6 +366,34 @@ class _SlidableClipper extends CustomClipper<Rect> {
 
   @override
   bool shouldReclip(_SlidableClipper oldClipper) {
+    return oldClipper.axis != axis;
+  }
+}
+
+class _ZeroSlidableClipper extends CustomClipper<Rect> {
+  _ZeroSlidableClipper({
+    required this.axis,
+    required this.controller,
+  }) : super(reclip: controller.animation);
+
+  final Axis axis;
+  final SlidableController controller;
+
+  @override
+  Rect getClip(Size size) {
+    switch (axis) {
+      case Axis.horizontal:
+        return Rect.fromLTRB(0, 0, 0, size.height);
+      case Axis.vertical:
+        return Rect.fromLTRB(0, 0, size.width, 0);
+    }
+  }
+
+  @override
+  Rect getApproximateClipRect(Size size) => getClip(size);
+
+  @override
+  bool shouldReclip(_ZeroSlidableClipper oldClipper) {
     return oldClipper.axis != axis;
   }
 }
